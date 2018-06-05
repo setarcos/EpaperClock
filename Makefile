@@ -65,6 +65,7 @@ Src/stm32f0xx_hal_msp.c \
 Src/system_stm32f0xx.c \
 Src/stm32f0xx_it.c \
 Src/main.c \
+Src/bitmaps.c \
 Src/epd2in9.c \
 Src/epdpaint.c \
 Src/epdif.c \

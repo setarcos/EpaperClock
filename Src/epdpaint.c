@@ -159,6 +159,18 @@ void Paint_DrawCharAt(Paint* paint, int x, int y, char ascii_char, sFONT* font, 
     }
 }
 
+void Paint_DrawBitmap(Paint* paint, int x, int y, int w, int h, const unsigned char *bit) {
+    for (int i = 0;  i < w; ++i)
+        for (int j = 0; j < h; ++j) {
+            unsigned char t = bit[j * w + i];
+            for (int k = 0; k < 8; ++k) {
+                if (t % 2) Paint_DrawPixel(paint, x + i * 8 + k, y + j, 0);
+                else Paint_DrawPixel(paint, x + i * 8 + k, y + j, 1);
+                t >>= 1;
+            }
+        }
+}
+
 /**
 *  @brief: this displays a string on the frame buffer but not refresh
 */

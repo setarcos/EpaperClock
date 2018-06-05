@@ -56,6 +56,7 @@ void Paint_SetRotate(Paint* paint, int rotate);
 unsigned char* Paint_GetImage(Paint* paint);
 void Paint_DrawAbsolutePixel(Paint* paint, int x, int y, int colored);
 void Paint_DrawPixel(Paint* paint, int x, int y, int colored);
+void Paint_DrawBitmap(Paint* paint, int x, int y, int w, int h, const unsigned char *bit);
 void Paint_DrawCharAt(Paint* paint, int x, int y, char ascii_char, sFONT* font, int colored);
 void Paint_DrawStringAt(Paint* paint, int x, int y, const char* text, sFONT* font, int colored);
 void Paint_DrawLine(Paint* paint, int x0, int y0, int x1, int y1, int colored);

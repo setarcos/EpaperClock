@@ -44,6 +44,7 @@
 #include "epd2in9.h"
 #include "epdif.h"
 #include "epdpaint.h"
+#include "bitmaps.h"
 #include <stdlib.h>
 
 /* USER CODE END Includes */
@@ -113,7 +114,7 @@ int main(void)
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
   EPD epd;
-  if (EPD_Init(&epd, lut_full_update) != 0) {
+  if (EPD_Init(&epd, lut_partial_update) != 0) {
     printf("e-Paper init failed\n");
     return -1;
   }
@@ -123,15 +124,6 @@ int main(void)
   Paint_Clear(&paint, UNCOLORED);
   Paint_SetRotate(&paint, ROTATE_90);
 
-  /* For simplicity, the arguments are explicit numerical coordinates */
-  /* Write strings to the buffer */
-  Paint_DrawFilledRectangle(&paint, 0, 0, 128, 34, COLORED);
-  Paint_DrawStringAt(&paint, 0, 0, "Hello world!", &Font24, UNCOLORED);
-  Paint_DrawStringAt(&paint, 0, 34, "e-Paper Demo", &Font24, COLORED);
-
-  /* Display the frame_buffer */
-  EPD_SetFrameMemory(&epd, frame_buffer, 0, 0, Paint_GetWidth(&paint), Paint_GetHeight(&paint));
-  EPD_DisplayFrame(&epd);
 
   /* USER CODE END 2 */
 
@@ -139,6 +131,26 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+      RTC_TimeTypeDef st;
+      RTC_DateTypeDef sd;
+  
+      /* Get the RTC current Time */
+      HAL_RTC_GetTime(&hrtc, &st, RTC_FORMAT_BIN);
+      HAL_RTC_GetDate(&hrtc, &sd, RTC_FORMAT_BIN);
+
+      /* Write strings to the buffer */
+      Paint_DrawBitmap(&paint, 0, 28, 9, 85, digits[st.Hours / 10]);
+      Paint_DrawBitmap(&paint, 70, 28, 9, 85, digits[st.Hours % 10]);
+      Paint_DrawBitmap(&paint, 10 + 70 * 2, 28, 9, 85, digits[st.Minutes / 10]);
+      Paint_DrawBitmap(&paint, 10 + 70 * 3, 28, 9, 85, digits[st.Minutes % 10]);
+      Paint_DrawBitmap(&paint, 135, 55, 2, 13, point);
+      Paint_DrawBitmap(&paint, 135, 85, 2, 13, point);
+
+      /* Display the frame_buffer */
+      EPD_SetFrameMemory(&epd, frame_buffer, 0, 0, Paint_GetWidth(&paint), Paint_GetHeight(&paint));
+      EPD_DisplayFrame(&epd);
+
+      HAL_Delay(2000);
 
   /* USER CODE END WHILE */
 
