@@ -51,14 +51,14 @@
 
 #define led_Pin GPIO_PIN_13
 #define led_GPIO_Port GPIOC
+#define spi_cs_Pin GPIO_PIN_0
+#define spi_cs_GPIO_Port GPIOB
 #define dc_Pin GPIO_PIN_2
 #define dc_GPIO_Port GPIOB
-#define busy_Pin GPIO_PIN_8
-#define busy_GPIO_Port GPIOA
-#define rst_Pin GPIO_PIN_9
-#define rst_GPIO_Port GPIOA
-#define spi_cs_Pin GPIO_PIN_6
-#define spi_cs_GPIO_Port GPIOB
+#define busy_Pin GPIO_PIN_10
+#define busy_GPIO_Port GPIOB
+#define rst_Pin GPIO_PIN_11
+#define rst_GPIO_Port GPIOB
 
 /* ########################## Assert Selection ############################## */
 /**
