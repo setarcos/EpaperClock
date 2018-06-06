@@ -61,6 +61,9 @@ UART_HandleTypeDef huart2;
 #define COLORED      0
 #define UNCOLORED    1
 
+int uart_state = 0;
+uint8_t rxBuf[12];
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -76,7 +79,39 @@ static void MX_USART2_UART_Init(void);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle)
+{
+    RTC_TimeTypeDef st;
+    RTC_DateTypeDef sd;
+    switch (uart_state) {
+        case 0:
+            HAL_UART_Transmit_IT(UartHandle, (uint8_t *)"\r\nInput Date(yy-mm-dd:w):\r\n", 27);
+            HAL_UART_Receive_IT(UartHandle, rxBuf, 10);
+            uart_state = 1;
+            break;
+        case 1:
+            sd.Year = (rxBuf[0] - '0') * 10 + rxBuf[1] - '0';
+            sd.Month = (rxBuf[3] - '0') * 10 + rxBuf[4] - '0';
+            sd.Date = (rxBuf[6] - '0') * 10 + rxBuf[7] - '0';
+            sd.WeekDay = rxBuf[9] - '0';
+            HAL_RTC_SetDate(&hrtc, &sd, RTC_FORMAT_BIN);
+            HAL_UART_Transmit_IT(UartHandle, (uint8_t *)"\r\nInput Time(hh:mm:ss):\r\n", 25);
+            HAL_UART_Receive_IT(UartHandle, rxBuf, 8);
+            uart_state = 2;
+            break;
+        case 2:
+            st.Hours = (rxBuf[0] - '0') * 10 + rxBuf[1] - '0';
+            st.Minutes = (rxBuf[3] - '0') * 10 + rxBuf[4] - '0';
+            st.Seconds = (rxBuf[6] - '0') * 10 + rxBuf[7] - '0';
+            st.TimeFormat = RTC_HOURFORMAT_24;
+            HAL_RTC_SetTime(&hrtc, &st, RTC_FORMAT_BIN);
+            HAL_UART_Transmit_IT(UartHandle, (uint8_t *)"\r\nInput Done!\r\n", 15);
+            HAL_UART_Receive_IT(UartHandle, rxBuf, 1);
+            uart_state = 0;
+            break;
+    }
 
+}
 /* USER CODE END 0 */
 
 /**
@@ -137,27 +172,36 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  HAL_GPIO_WritePin(led_GPIO_Port, led_Pin, GPIO_PIN_SET);
+  HAL_UART_Receive_IT(&huart2, rxBuf, 1);
   while (1)
   {
       RTC_TimeTypeDef st;
       RTC_DateTypeDef sd;
       char date[10];
+      const char* wkd[] = {"Mon", "Tue", "Wen", "Thu", "Fri", "Sat", "Sun"};
   
       /* Get the RTC current Time */
       HAL_RTC_GetTime(&hrtc, &st, RTC_FORMAT_BIN);
       HAL_RTC_GetDate(&hrtc, &sd, RTC_FORMAT_BIN);
 
       /* Write strings to the buffer */
+      if (uart_state == 2)
+          Paint_DrawFilledRectangle(&paint, 50, 0, 290, 24, UNCOLORED);
       sprintf(date, "%02d-%02d-%02d", sd.Year, sd.Month, sd.Date);
       Paint_DrawStringAt(&paint, 50, 0, date, &Font24, COLORED);
+      Paint_DrawStringAt(&paint, 200, 0, wkd[sd.WeekDay], &Font24, COLORED);
       Paint_DrawBitmap(&paint, 0, 28, 9, 85, digits[st.Hours / 10]);
       Paint_DrawBitmap(&paint, 70, 28, 9, 85, digits[st.Hours % 10]);
       Paint_DrawBitmap(&paint, 10 + 70 * 2, 28, 9, 85, digits[st.Minutes / 10]);
       Paint_DrawBitmap(&paint, 10 + 70 * 3, 28, 9, 85, digits[st.Minutes % 10]);
       Paint_DrawBitmap(&paint, 135, 55, 2, 13, point);
       Paint_DrawBitmap(&paint, 135, 85, 2, 13, point);
-      if ((st.Seconds == 0) || (st.Seconds == 1))
+      if ((st.Seconds == 0) || (st.Seconds == 1)) {
           Paint_DrawFilledRectangle(&paint, 0, 120, 296, 128, UNCOLORED);
+          if ((st.Hours == 0) && (st.Minutes == 0))
+              Paint_DrawFilledRectangle(&paint, 50, 0, 290, 24, UNCOLORED);
+      }
       Paint_DrawFilledRectangle(&paint, 0, 120, st.Seconds * 5 + 5, 128, COLORED);
 
       /* Display the frame_buffer */
@@ -186,11 +230,17 @@ void SystemClock_Config(void)
   RCC_ClkInitTypeDef RCC_ClkInitStruct;
   RCC_PeriphCLKInitTypeDef PeriphClkInit;
 
+    /**Configure LSE Drive Capability 
+    */
+  HAL_PWR_EnableBkUpAccess();
+
+  __HAL_RCC_LSEDRIVE_CONFIG(RCC_LSEDRIVE_HIGH);
+
     /**Initializes the CPU, AHB and APB busses clocks 
     */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI|RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE|RCC_OSCILLATORTYPE_LSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
+  RCC_OscInitStruct.LSEState = RCC_LSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL6;
@@ -214,7 +264,7 @@ void SystemClock_Config(void)
   }
 
   PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC;
-  PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
+  PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
