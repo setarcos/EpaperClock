@@ -59,6 +59,10 @@
 #define busy_GPIO_Port GPIOB
 #define rst_Pin GPIO_PIN_11
 #define rst_GPIO_Port GPIOB
+#define swt_in_Pin GPIO_PIN_12
+#define swt_in_GPIO_Port GPIOB
+#define swt_out_Pin GPIO_PIN_13
+#define swt_out_GPIO_Port GPIOB
 
 /* ########################## Assert Selection ############################## */
 /**

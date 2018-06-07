@@ -195,7 +195,7 @@ int main(void)
           Paint_DrawFilledRectangle(&paint, 50, 0, 290, 24, UNCOLORED);
       sprintf(date, "%02d-%02d-%02d", sd.Year, sd.Month, sd.Date);
       Paint_DrawStringAt(&paint, 50, 0, date, &Font24, COLORED);
-      Paint_DrawStringAt(&paint, 200, 0, wkd[sd.WeekDay], &Font24, COLORED);
+      Paint_DrawStringAt(&paint, 200, 0, wkd[sd.WeekDay - 1], &Font24, COLORED);
       Paint_DrawBitmap(&paint, 0, 28, 9, 85, digits[st.Hours / 10]);
       Paint_DrawBitmap(&paint, 70, 28, 9, 85, digits[st.Hours % 10]);
       Paint_DrawBitmap(&paint, 10 + 70 * 2, 28, 9, 85, digits[st.Minutes / 10]);
@@ -212,10 +212,20 @@ int main(void)
       /* Display the frame_buffer */
       EPD_SetFrameMemory(&epd, frame_buffer, 0, 0, Paint_GetWidth(&paint), Paint_GetHeight(&paint));
       EPD_DisplayFrame(&epd);
-      HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
-      SystemClock_Config();
 
-     // HAL_Delay(1000);
+      int swton = 1;
+      HAL_GPIO_WritePin(swt_out_GPIO_Port, swt_out_Pin, GPIO_PIN_SET);
+      if (HAL_GPIO_ReadPin(swt_in_GPIO_Port, swt_in_Pin) != GPIO_PIN_SET) swton = 0;
+      HAL_GPIO_WritePin(swt_out_GPIO_Port, swt_out_Pin, GPIO_PIN_RESET);
+      if (HAL_GPIO_ReadPin(swt_in_GPIO_Port, swt_in_Pin) != GPIO_PIN_RESET) swton = 0;
+      if (swton) {
+          HAL_Delay(1000);
+      } else {
+          HAL_GPIO_WritePin(led_GPIO_Port, led_Pin, GPIO_PIN_SET);
+          HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+          SystemClock_Config();
+          HAL_GPIO_WritePin(led_GPIO_Port, led_Pin, GPIO_PIN_RESET);
+      }
 
   /* USER CODE END WHILE */
 
@@ -293,8 +303,8 @@ void SystemClock_Config(void)
 static void MX_RTC_Init(void)
 {
 
-  RTC_TimeTypeDef sTime;
-  RTC_DateTypeDef sDate;
+//  RTC_TimeTypeDef sTime;
+//  RTC_DateTypeDef sDate;
   RTC_AlarmTypeDef sAlarm;
 
     /**Initialize RTC Only 
@@ -312,12 +322,13 @@ static void MX_RTC_Init(void)
   }
 
     /**Initialize RTC and set the Time and Date 
+    *
   sTime.Hours = 0x0;
   sTime.Minutes = 0x0;
   sTime.Seconds = 0x0;
   sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
   sTime.StoreOperation = RTC_STOREOPERATION_RESET;
-  if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN) != HAL_OK)
+  if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
@@ -327,7 +338,7 @@ static void MX_RTC_Init(void)
   sDate.Date = 0x1;
   sDate.Year = 0x0;
 
-  if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN) != HAL_OK)
+  if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
@@ -340,17 +351,18 @@ static void MX_RTC_Init(void)
   sAlarm.AlarmTime.SubSeconds = 0x0;
   sAlarm.AlarmTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
   sAlarm.AlarmTime.StoreOperation = RTC_STOREOPERATION_RESET;
-  sAlarm.AlarmMask = RTC_ALARMMASK_ALL;
+  sAlarm.AlarmMask = RTC_ALARMMASK_DATEWEEKDAY|RTC_ALARMMASK_HOURS
+                              |RTC_ALARMMASK_MINUTES;
   sAlarm.AlarmSubSecondMask = RTC_ALARMSUBSECONDMASK_ALL;
   sAlarm.AlarmDateWeekDaySel = RTC_ALARMDATEWEEKDAYSEL_DATE;
   sAlarm.AlarmDateWeekDay = 0x1;
   sAlarm.Alarm = RTC_ALARM_A;
-  if (HAL_RTC_SetAlarm_IT(&hrtc, &sAlarm, RTC_FORMAT_BIN) != HAL_OK)
+  if (HAL_RTC_SetAlarm_IT(&hrtc, &sAlarm, RTC_FORMAT_BCD) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
 
-  HAL_RTCEx_BKUPWrite(&hrtc,RTC_BKP_DR0,0x32F0);
+  HAL_RTCEx_BKUPWrite(&hrtc,RTC_BKP_DR0,0x32F2);
 
 }
 
@@ -425,7 +437,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(led_GPIO_Port, led_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, spi_cs_Pin|dc_Pin|rst_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, spi_cs_Pin|dc_Pin|rst_Pin|swt_out_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : led_Pin */
   GPIO_InitStruct.Pin = led_Pin;
@@ -444,28 +456,28 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : spi_cs_Pin dc_Pin rst_Pin */
-  GPIO_InitStruct.Pin = spi_cs_Pin|dc_Pin|rst_Pin;
+  /*Configure GPIO pins : spi_cs_Pin dc_Pin rst_Pin swt_out_Pin */
+  GPIO_InitStruct.Pin = spi_cs_Pin|dc_Pin|rst_Pin|swt_out_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PB1 PB12 PB13 PB14 
-                           PB15 PB3 PB4 PB5 
-                           PB6 PB7 PB8 PB9 */
-  GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14 
-                          |GPIO_PIN_15|GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5 
-                          |GPIO_PIN_6|GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9;
+  /*Configure GPIO pins : PB1 PB14 PB15 PB3 
+                           PB4 PB5 PB6 PB7 
+                           PB8 PB9 */
+  GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_14|GPIO_PIN_15|GPIO_PIN_3 
+                          |GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7 
+                          |GPIO_PIN_8|GPIO_PIN_9;
   GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : busy_Pin */
-  GPIO_InitStruct.Pin = busy_Pin;
+  /*Configure GPIO pins : busy_Pin swt_in_Pin */
+  GPIO_InitStruct.Pin = busy_Pin|swt_in_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(busy_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PF6 PF7 */
   GPIO_InitStruct.Pin = GPIO_PIN_6|GPIO_PIN_7;
