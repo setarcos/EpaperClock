@@ -170,6 +170,7 @@ int main(void)
   EPD_DisplayFrame(&epd);
   EPD_WaitUntilIdle(&epd);
 
+  Paint_Clear(&paint, UNCOLORED);
   if (EPD_Init(&epd, lut_partial_update) != 0) {
     printf("e-Paper init failed\n");
     return -1;
