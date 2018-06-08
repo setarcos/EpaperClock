@@ -113,7 +113,7 @@ void EPD_SendData(EPD* epd, unsigned char data) {
  */
 void EPD_WaitUntilIdle(EPD* epd) {
   while(EPD_DigitalRead(epd, epd->busy_pin) == HIGH) {      //0: busy, 1: idle
-    EPD_DelayMs(epd, 100);
+    EPD_DelayMs(epd, 10);
   }      
 }
 
@@ -201,7 +201,7 @@ void EPD_DisplayFrame(EPD* epd) {
   EPD_SendData(epd, 0xC4);
   EPD_SendCommand(epd, MASTER_ACTIVATION);
   EPD_SendCommand(epd, TERMINATE_FRAME_READ_WRITE);
-  EPD_WaitUntilIdle(epd);
+//  EPD_WaitUntilIdle(epd);
 }
 
 /**

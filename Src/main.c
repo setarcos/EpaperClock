@@ -107,7 +107,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle)
             HAL_RTC_SetTime(&hrtc, &st, RTC_FORMAT_BIN);
             HAL_UART_Transmit_IT(UartHandle, (uint8_t *)"\r\nInput Done!\r\n", 15);
             HAL_UART_Receive_IT(UartHandle, rxBuf, 1);
-            uart_state = 0;
+            uart_state = 3;
             break;
     }
 
@@ -128,6 +128,7 @@ int main(void)
 {
   /* USER CODE BEGIN 1 */
   unsigned char* frame_buffer = (unsigned char*)malloc(EPD_WIDTH * EPD_HEIGHT / 8);
+  unsigned char fb_sec[10] = {0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80};
 
   /* USER CODE END 1 */
 
@@ -164,9 +165,10 @@ int main(void)
   Paint_Clear(&paint, UNCOLORED);
   Paint_SetRotate(&paint, ROTATE_90);
 
-  Paint_DrawStringAt(&paint, 0, 50, "Simple Calendar.", &Font24, COLORED);
+  Paint_DrawStringAt(&paint, 20, 50, "Simple Calendar.", &Font24, COLORED);
   EPD_SetFrameMemory(&epd, frame_buffer, 0, 0, Paint_GetWidth(&paint), Paint_GetHeight(&paint));
   EPD_DisplayFrame(&epd);
+  EPD_WaitUntilIdle(&epd);
 
   if (EPD_Init(&epd, lut_partial_update) != 0) {
     printf("e-Paper init failed\n");
@@ -179,6 +181,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   HAL_GPIO_WritePin(led_GPIO_Port, led_Pin, GPIO_PIN_SET);
   HAL_UART_Receive_IT(&huart2, rxBuf, 1);
+  int refreshall = 2;
   while (1)
   {
       RTC_TimeTypeDef st;
@@ -191,41 +194,62 @@ int main(void)
       HAL_RTC_GetDate(&hrtc, &sd, RTC_FORMAT_BIN);
 
       /* Write strings to the buffer */
-      if (uart_state == 2)
+      if (uart_state > 1) refreshall = 2;
+      if (uart_state == 3) uart_state = 0;
+      if (st.Seconds < 2) refreshall = 1;
+      if (refreshall) {
           Paint_DrawFilledRectangle(&paint, 50, 0, 290, 24, UNCOLORED);
-      sprintf(date, "%02d-%02d-%02d", sd.Year, sd.Month, sd.Date);
-      Paint_DrawStringAt(&paint, 50, 0, date, &Font24, COLORED);
-      Paint_DrawStringAt(&paint, 200, 0, wkd[sd.WeekDay - 1], &Font24, COLORED);
-      Paint_DrawBitmap(&paint, 0, 28, 9, 85, digits[st.Hours / 10]);
-      Paint_DrawBitmap(&paint, 70, 28, 9, 85, digits[st.Hours % 10]);
-      Paint_DrawBitmap(&paint, 10 + 70 * 2, 28, 9, 85, digits[st.Minutes / 10]);
-      Paint_DrawBitmap(&paint, 10 + 70 * 3, 28, 9, 85, digits[st.Minutes % 10]);
-      Paint_DrawBitmap(&paint, 135, 55, 2, 13, point);
-      Paint_DrawBitmap(&paint, 135, 85, 2, 13, point);
-      if ((st.Seconds == 0) || (st.Seconds == 1)) {
-          Paint_DrawFilledRectangle(&paint, 0, 120, 296, 128, UNCOLORED);
-          if ((st.Hours == 0) && (st.Minutes == 0))
-              Paint_DrawFilledRectangle(&paint, 50, 0, 290, 24, UNCOLORED);
+          Paint_DrawFilledRectangle(&paint, 0, 120, 296, 127, UNCOLORED);
+          sprintf(date, "%02d-%02d-%02d", sd.Year, sd.Month, sd.Date);
+          Paint_DrawStringAt(&paint, 50, 0, date, &Font24, COLORED);
+          Paint_DrawStringAt(&paint, 200, 0, wkd[sd.WeekDay - 1], &Font24, COLORED);
+          Paint_DrawBitmap(&paint, 0, 28, 9, 85, digits[st.Hours / 10]);
+          Paint_DrawBitmap(&paint, 70, 28, 9, 85, digits[st.Hours % 10]);
+          Paint_DrawBitmap(&paint, 10 + 70 * 2, 28, 9, 85, digits[st.Minutes / 10]);
+          Paint_DrawBitmap(&paint, 10 + 70 * 3, 28, 9, 85, digits[st.Minutes % 10]);
+          Paint_DrawBitmap(&paint, 135, 55, 2, 13, point);
+          Paint_DrawBitmap(&paint, 135, 85, 2, 13, point);
+          if (refreshall == 1) { // Normal refresh, Seconds should be zero or one
+              if (st.Seconds)
+                  Paint_DrawFilledRectangle(&paint, 0, 121, 9, 127, COLORED);
+              else
+                  Paint_DrawFilledRectangle(&paint, 0, 121, 4, 127, COLORED);
+          }
+          /* Display the frame_buffer */
+          EPD_SetFrameMemory(&epd, frame_buffer, 0, 0, Paint_GetWidth(&paint), Paint_GetHeight(&paint));
+          EPD_DisplayFrame(&epd);
+          if (refreshall == 2) { // first time run
+              EPD_WaitUntilIdle(&epd);
+              EPD_SetFrameMemory(&epd, frame_buffer, 0, 0, Paint_GetWidth(&paint), Paint_GetHeight(&paint));
+              EPD_DisplayFrame(&epd);
+              EPD_WaitUntilIdle(&epd);
+          }
+      } else  {
+          /*if (st.Seconds == 2)
+              EPD_SetFrameMemory(&epd, fb_sec, 0, 0, 8, 10);
+          if (st.Seconds == 3)
+              EPD_SetFrameMemory(&epd, fb_sec, 0, 10, 8, 5); */
+          EPD_SetFrameMemory(&epd, fb_sec, 0, 5 * st.Seconds - 5, 8, 10);
+          EPD_DisplayFrame(&epd);
       }
-      Paint_DrawFilledRectangle(&paint, 0, 120, st.Seconds * 5 + 5, 128, COLORED);
-
-      /* Display the frame_buffer */
-      EPD_SetFrameMemory(&epd, frame_buffer, 0, 0, Paint_GetWidth(&paint), Paint_GetHeight(&paint));
-      EPD_DisplayFrame(&epd);
+      refreshall = 0;
 
       int swton = 1;
       HAL_GPIO_WritePin(swt_out_GPIO_Port, swt_out_Pin, GPIO_PIN_SET);
       if (HAL_GPIO_ReadPin(swt_in_GPIO_Port, swt_in_Pin) != GPIO_PIN_SET) swton = 0;
       HAL_GPIO_WritePin(swt_out_GPIO_Port, swt_out_Pin, GPIO_PIN_RESET);
       if (HAL_GPIO_ReadPin(swt_in_GPIO_Port, swt_in_Pin) != GPIO_PIN_RESET) swton = 0;
+      HAL_GPIO_WritePin(led_GPIO_Port, led_Pin, GPIO_PIN_SET);
       if (swton) {
-          HAL_Delay(1000);
+          HAL_SuspendTick();
+          HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+          HAL_ResumeTick();
       } else {
-          HAL_GPIO_WritePin(led_GPIO_Port, led_Pin, GPIO_PIN_SET);
           HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
           SystemClock_Config();
-          HAL_GPIO_WritePin(led_GPIO_Port, led_Pin, GPIO_PIN_RESET);
       }
+      if ((st.Seconds != 59) && (st.Seconds != 0)) // refresh time takes much longer than usual, hold the flash
+          HAL_GPIO_WritePin(led_GPIO_Port, led_Pin, GPIO_PIN_RESET);
 
   /* USER CODE END WHILE */
 
@@ -351,8 +375,9 @@ static void MX_RTC_Init(void)
   sAlarm.AlarmTime.SubSeconds = 0x0;
   sAlarm.AlarmTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
   sAlarm.AlarmTime.StoreOperation = RTC_STOREOPERATION_RESET;
-  sAlarm.AlarmMask = RTC_ALARMMASK_DATEWEEKDAY|RTC_ALARMMASK_HOURS
-                              |RTC_ALARMMASK_MINUTES;
+  sAlarm.AlarmMask = RTC_ALARMMASK_ALL;
+//  sAlarm.AlarmMask = RTC_ALARMMASK_DATEWEEKDAY|RTC_ALARMMASK_HOURS
+//                              |RTC_ALARMMASK_MINUTES;
   sAlarm.AlarmSubSecondMask = RTC_ALARMSUBSECONDMASK_ALL;
   sAlarm.AlarmDateWeekDaySel = RTC_ALARMDATEWEEKDAYSEL_DATE;
   sAlarm.AlarmDateWeekDay = 0x1;
