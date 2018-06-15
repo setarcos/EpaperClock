@@ -72,6 +72,7 @@ static void MX_GPIO_Init(void);
 static void MX_RTC_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MY_GPIO_DeInit(void);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
@@ -128,7 +129,6 @@ int main(void)
 {
   /* USER CODE BEGIN 1 */
   unsigned char* frame_buffer = (unsigned char*)malloc(EPD_WIDTH * EPD_HEIGHT / 8);
-  unsigned char fb_sec[10] = {0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80};
 
   /* USER CODE END 1 */
 
@@ -168,7 +168,6 @@ int main(void)
   Paint_DrawStringAt(&paint, 20, 50, "Simple Calendar.", &Font24, COLORED);
   EPD_SetFrameMemory(&epd, frame_buffer, 0, 0, Paint_GetWidth(&paint), Paint_GetHeight(&paint));
   EPD_DisplayFrame(&epd);
-  EPD_WaitUntilIdle(&epd);
 
   Paint_Clear(&paint, UNCOLORED);
   if (EPD_Init(&epd, lut_partial_update) != 0) {
@@ -181,8 +180,16 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   HAL_GPIO_WritePin(led_GPIO_Port, led_Pin, GPIO_PIN_SET);
-  HAL_UART_Receive_IT(&huart2, rxBuf, 1);
-  int refreshall = 2;
+  int swton = 1;
+  HAL_GPIO_WritePin(swt_out_GPIO_Port, swt_out_Pin, GPIO_PIN_SET);
+  if (HAL_GPIO_ReadPin(swt_in_GPIO_Port, swt_in_Pin) != GPIO_PIN_SET) swton = 0;
+  HAL_GPIO_WritePin(swt_out_GPIO_Port, swt_out_Pin, GPIO_PIN_RESET);
+  if (HAL_GPIO_ReadPin(swt_in_GPIO_Port, swt_in_Pin) != GPIO_PIN_RESET) swton = 0;
+  if (swton)
+      HAL_UART_Receive_IT(&huart2, rxBuf, 1);
+  else {
+      MY_GPIO_DeInit();
+  }
   while (1)
   {
       RTC_TimeTypeDef st;
@@ -194,53 +201,29 @@ int main(void)
       HAL_RTC_GetTime(&hrtc, &st, RTC_FORMAT_BIN);
       HAL_RTC_GetDate(&hrtc, &sd, RTC_FORMAT_BIN);
 
-      /* Write strings to the buffer */
-      if (uart_state > 1) refreshall = 2;
-      if (uart_state == 3) uart_state = 0;
-      if (st.Seconds < 2) refreshall = 1;
-      if (refreshall) {
-          Paint_DrawFilledRectangle(&paint, 50, 0, 290, 24, UNCOLORED);
-          Paint_DrawFilledRectangle(&paint, 0, 120, 296, 127, UNCOLORED);
-          sprintf(date, "%02d-%02d-%02d", sd.Year, sd.Month, sd.Date);
-          Paint_DrawStringAt(&paint, 50, 0, date, &Font24, COLORED);
-          Paint_DrawStringAt(&paint, 200, 0, wkd[sd.WeekDay - 1], &Font24, COLORED);
-          Paint_DrawBitmap(&paint, 0, 28, 9, 85, digits[st.Hours / 10]);
-          Paint_DrawBitmap(&paint, 70, 28, 9, 85, digits[st.Hours % 10]);
-          Paint_DrawBitmap(&paint, 10 + 70 * 2, 28, 9, 85, digits[st.Minutes / 10]);
-          Paint_DrawBitmap(&paint, 10 + 70 * 3, 28, 9, 85, digits[st.Minutes % 10]);
-          Paint_DrawBitmap(&paint, 135, 55, 2, 13, point);
-          Paint_DrawBitmap(&paint, 135, 85, 2, 13, point);
-          if (refreshall == 1) { // Normal refresh, Seconds should be zero or one
-              if (st.Seconds)
-                  Paint_DrawFilledRectangle(&paint, 0, 121, 9, 127, COLORED);
-              else
-                  Paint_DrawFilledRectangle(&paint, 0, 121, 4, 127, COLORED);
-          }
-          /* Display the frame_buffer */
-          EPD_SetFrameMemory(&epd, frame_buffer, 0, 0, Paint_GetWidth(&paint), Paint_GetHeight(&paint));
-          EPD_DisplayFrame(&epd);
-          if (refreshall == 2) { // first time run
-              EPD_WaitUntilIdle(&epd);
-              EPD_SetFrameMemory(&epd, frame_buffer, 0, 0, Paint_GetWidth(&paint), Paint_GetHeight(&paint));
-              EPD_DisplayFrame(&epd);
-              EPD_WaitUntilIdle(&epd);
-          }
-      } else  {
-          /*if (st.Seconds == 2)
-              EPD_SetFrameMemory(&epd, fb_sec, 0, 0, 8, 10);
-          if (st.Seconds == 3)
-              EPD_SetFrameMemory(&epd, fb_sec, 0, 10, 8, 5); */
-          EPD_SetFrameMemory(&epd, fb_sec, 0, 5 * st.Seconds - 5, 8, 10);
-          EPD_DisplayFrame(&epd);
-      }
-      refreshall = 0;
+      if ((st.Seconds == 0) && (st.Minutes == 0) && (st.Hours == 0))
+          NVIC_SystemReset();
 
-      int swton = 1;
-      HAL_GPIO_WritePin(swt_out_GPIO_Port, swt_out_Pin, GPIO_PIN_SET);
-      if (HAL_GPIO_ReadPin(swt_in_GPIO_Port, swt_in_Pin) != GPIO_PIN_SET) swton = 0;
-      HAL_GPIO_WritePin(swt_out_GPIO_Port, swt_out_Pin, GPIO_PIN_RESET);
-      if (HAL_GPIO_ReadPin(swt_in_GPIO_Port, swt_in_Pin) != GPIO_PIN_RESET) swton = 0;
+      /* Write strings to the buffer */
+      HAL_GPIO_WritePin(led_GPIO_Port, led_Pin, GPIO_PIN_RESET);
+      Paint_DrawFilledRectangle(&paint, 50, 0, 290, 24, UNCOLORED);
+      Paint_DrawFilledRectangle(&paint, 0, 120, 296, 127, UNCOLORED);
+      sprintf(date, "%02d-%02d-%02d", sd.Year, sd.Month, sd.Date);
+      Paint_DrawStringAt(&paint, 50, 0, date, &Font24, COLORED);
+      Paint_DrawStringAt(&paint, 200, 0, wkd[sd.WeekDay - 1], &Font24, COLORED);
+      Paint_DrawBitmap(&paint, 0, 28, 9, 85, digits[st.Hours / 10]);
+      Paint_DrawBitmap(&paint, 70, 28, 9, 85, digits[st.Hours % 10]);
+      Paint_DrawBitmap(&paint, 10 + 70 * 2, 28, 9, 85, digits[st.Minutes / 10]);
+      Paint_DrawBitmap(&paint, 10 + 70 * 3, 28, 9, 85, digits[st.Minutes % 10]);
+      Paint_DrawBitmap(&paint, 135, 55, 2, 13, point);
+      Paint_DrawBitmap(&paint, 135, 85, 2, 13, point);
       HAL_GPIO_WritePin(led_GPIO_Port, led_Pin, GPIO_PIN_SET);
+      /* Display the frame_buffer */
+      EPD_SetFrameMemory(&epd, frame_buffer, 0, 0, Paint_GetWidth(&paint), Paint_GetHeight(&paint));
+      EPD_DisplayFrame(&epd);
+      EPD_SetFrameMemory(&epd, frame_buffer, 0, 0, Paint_GetWidth(&paint), Paint_GetHeight(&paint));
+      EPD_DisplayFrame(&epd);
+
       if (swton) {
           HAL_SuspendTick();
           HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
@@ -249,8 +232,6 @@ int main(void)
           HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
           SystemClock_Config();
       }
-      if ((st.Seconds != 59) && (st.Seconds != 0)) // refresh time takes much longer than usual, hold the flash
-          HAL_GPIO_WritePin(led_GPIO_Port, led_Pin, GPIO_PIN_RESET);
 
   /* USER CODE END WHILE */
 
@@ -377,9 +358,9 @@ static void MX_RTC_Init(void)
   sAlarm.AlarmTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
   sAlarm.AlarmTime.StoreOperation = RTC_STOREOPERATION_RESET;
   sAlarm.AlarmMask = RTC_ALARMMASK_ALL;
-//  sAlarm.AlarmMask = RTC_ALARMMASK_DATEWEEKDAY|RTC_ALARMMASK_HOURS
-//                              |RTC_ALARMMASK_MINUTES;
-  sAlarm.AlarmSubSecondMask = RTC_ALARMSUBSECONDMASK_ALL;
+  sAlarm.AlarmMask = RTC_ALARMMASK_DATEWEEKDAY|RTC_ALARMMASK_HOURS
+                              |RTC_ALARMMASK_MINUTES;
+//  sAlarm.AlarmSubSecondMask = RTC_ALARMSUBSECONDMASK_ALL;
   sAlarm.AlarmDateWeekDaySel = RTC_ALARMDATEWEEKDAYSEL_DATE;
   sAlarm.AlarmDateWeekDay = 0x1;
   sAlarm.Alarm = RTC_ALARM_A;
@@ -448,6 +429,13 @@ static void MX_USART2_UART_Init(void)
         * Free pins are configured automatically as Analog (this feature is enabled through 
         * the Code Generation settings)
 */
+
+static void MY_GPIO_DeInit(void)
+{
+  HAL_GPIO_DeInit(GPIOB, swt_in_Pin);
+  HAL_UART_MspDeInit(&huart2);
+}
+
 static void MX_GPIO_Init(void)
 {
 

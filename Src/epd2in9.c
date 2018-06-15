@@ -201,7 +201,7 @@ void EPD_DisplayFrame(EPD* epd) {
   EPD_SendData(epd, 0xC4);
   EPD_SendCommand(epd, MASTER_ACTIVATION);
   EPD_SendCommand(epd, TERMINATE_FRAME_READ_WRITE);
-//  EPD_WaitUntilIdle(epd);
+  EPD_WaitUntilIdle(epd);
 }
 
 /**
