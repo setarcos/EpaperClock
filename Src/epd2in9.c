@@ -198,7 +198,7 @@ void EPD_ClearFrameMemory(EPD* epd, unsigned char color) {
 */
 void EPD_DisplayFrame(EPD* epd) {
   EPD_SendCommand(epd, DISPLAY_UPDATE_CONTROL_2);
-  EPD_SendData(epd, 0xC4);
+  EPD_SendData(epd, 0xC7);
   EPD_SendCommand(epd, MASTER_ACTIVATION);
   EPD_SendCommand(epd, TERMINATE_FRAME_READ_WRITE);
   EPD_WaitUntilIdle(epd);
