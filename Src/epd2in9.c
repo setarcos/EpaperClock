@@ -114,7 +114,7 @@ void EPD_SendData(EPD* epd, unsigned char data) {
 void EPD_WaitUntilIdle(EPD* epd) {
   while(EPD_DigitalRead(epd, epd->busy_pin) == HIGH) {      //0: busy, 1: idle
     EPD_DelayMs(epd, 10);
-  }      
+  }
 }
 
 /**
@@ -123,10 +123,10 @@ void EPD_WaitUntilIdle(EPD* epd) {
  *          see EPD::Sleep();
  */
 void EPD_Reset(EPD* epd) {
-  EPD_DigitalWrite(epd, epd->reset_pin, LOW);                //module reset    
+  EPD_DigitalWrite(epd, epd->reset_pin, LOW);                //module reset
   EPD_DelayMs(epd, 200);
   EPD_DigitalWrite(epd, epd->reset_pin, HIGH);
-  EPD_DelayMs(epd, 200);    
+  EPD_DelayMs(epd, 200);
 }
 
 /**
@@ -193,7 +193,7 @@ void EPD_ClearFrameMemory(EPD* epd, unsigned char color) {
 *  @brief: update the display
 *          there are 2 memory areas embedded in the e-paper display
 *          but once this function is called,
-*          the the next action of SetFrameMemory or ClearFrame will 
+*          the the next action of SetFrameMemory or ClearFrame will
 *          set the other memory area.
 */
 void EPD_DisplayFrame(EPD* epd) {
@@ -205,9 +205,9 @@ void EPD_DisplayFrame(EPD* epd) {
 }
 
 /**
- *  @brief: After this command is transmitted, the chip would enter the 
- *          deep-sleep mode to save power. 
- *          The deep sleep mode would return to standby by hardware reset. 
+ *  @brief: After this command is transmitted, the chip would enter the
+ *          deep-sleep mode to save power.
+ *          The deep sleep mode would return to standby by hardware reset.
  *          You can use EPD_Init() to awaken
  */
 void EPD_Sleep(EPD* epd) {
@@ -224,7 +224,7 @@ static void EPD_SetLut(EPD* epd, const unsigned char* lut) {
   /* the length of look-up table is 30 bytes */
   for (int i = 0; i < 30; i++) {
     EPD_SendData(epd, epd->lut[i]);
-  } 
+  }
 }
 
 /**
@@ -257,17 +257,17 @@ static void EPD_SetMemoryPointer(EPD* epd, int x, int y) {
 
 const unsigned char lut_full_update[] =
 {
-    0x02, 0x02, 0x01, 0x11, 0x12, 0x12, 0x22, 0x22, 
-    0x66, 0x69, 0x69, 0x59, 0x58, 0x99, 0x99, 0x88, 
-    0x00, 0x00, 0x00, 0x00, 0xF8, 0xB4, 0x13, 0x51, 
+    0x02, 0x02, 0x01, 0x11, 0x12, 0x12, 0x22, 0x22,
+    0x66, 0x69, 0x69, 0x59, 0x58, 0x99, 0x99, 0x88,
+    0x00, 0x00, 0x00, 0x00, 0xF8, 0xB4, 0x13, 0x51,
     0x35, 0x51, 0x51, 0x19, 0x01, 0x00
 };
 
 const unsigned char lut_partial_update[] =
 {
-    0x10, 0x18, 0x18, 0x08, 0x18, 0x18, 0x08, 0x00, 
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-    0x00, 0x00, 0x00, 0x00, 0x13, 0x14, 0x44, 0x12, 
+    0x10, 0x18, 0x18, 0x08, 0x18, 0x18, 0x08, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x13, 0x14, 0x44, 0x12,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 

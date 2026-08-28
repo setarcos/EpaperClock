@@ -83,7 +83,7 @@ int EpdInitCallback(void) {
   pins[RST_PIN] = epd_rst_pin;
   pins[DC_PIN] = epd_dc_pin;
   pins[BUSY_PIN] = epd_busy_pin;
-  
+
   return 0;
 }
 

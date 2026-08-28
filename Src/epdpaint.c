@@ -2,7 +2,7 @@
  *  @filename   :   epdpaint.c
  *  @brief      :   Paint tools
  *  @author     :   Yehui from Waveshare
- *  
+ *
  *  Copyright (C) Waveshare     July 28 2017
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -178,7 +178,7 @@ void Paint_DrawStringAt(Paint* paint, int x, int y, const char* text, sFONT* fon
     const char* p_text = text;
     unsigned int counter = 0;
     int refcolumn = x;
-    
+
     /* Send the string character by character on EPD */
     while (*p_text != 0) {
         /* Display one character on EPD */
@@ -204,12 +204,12 @@ void Paint_DrawLine(Paint* paint, int x0, int y0, int x1, int y1, int colored) {
 
     while((x0 != x1) && (y0 != y1)) {
         Paint_DrawPixel(paint, x0, y0 , colored);
-        if (2 * err >= dy) {     
+        if (2 * err >= dy) {
             err += dy;
             x0 += sx;
         }
         if (2 * err <= dx) {
-            err += dx; 
+            err += dx;
             y0 += sy;
         }
     }
@@ -244,7 +244,7 @@ void Paint_DrawRectangle(Paint* paint, int x0, int y0, int x1, int y1, int color
     max_x = x1 > x0 ? x1 : x0;
     min_y = y1 > y0 ? y0 : y1;
     max_y = y1 > y0 ? y1 : y0;
-    
+
     Paint_DrawHorizontalLine(paint, min_x, min_y, max_x - min_x + 1, colored);
     Paint_DrawHorizontalLine(paint, min_x, max_y, max_x - min_x + 1, colored);
     Paint_DrawVerticalLine(paint, min_x, min_y, max_y - min_y + 1, colored);
@@ -261,7 +261,7 @@ void Paint_DrawFilledRectangle(Paint* paint, int x0, int y0, int x1, int y1, int
     max_x = x1 > x0 ? x1 : x0;
     min_y = y1 > y0 ? y0 : y1;
     max_y = y1 > y0 ? y1 : y0;
-    
+
     for (i = min_x; i <= max_x; i++) {
       Paint_DrawVerticalLine(paint, i, min_y, max_y - min_y + 1, colored);
     }

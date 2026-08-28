@@ -2,7 +2,7 @@
  *  @filename   :   epd2in9.h
  *  @brief      :   Header file for e-paper library epd2in9.c
  *  @author     :   Yehui from Waveshare
- *  
+ *
  *  Copyright (C) Waveshare     September 12 2017
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
