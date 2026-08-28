@@ -60,9 +60,14 @@ UART_HandleTypeDef huart2;
 /* Private variables ---------------------------------------------------------*/
 #define COLORED      0
 #define UNCOLORED    1
+/* After this many RTC-alarm wakeups without any UART activity, fall back
+   from SLEEP (UART debug) mode to the low-power STOP mode. */
+#define UART_IDLE_TIMEOUT_MIN  5
 
 int uart_state = 0;
 uint8_t rxBuf[12];
+uint32_t uart_idle_min = 0;         /* consecutive alarm wakeups w/o UART traffic */
+volatile uint8_t rtc_alarm_flag = 0; /* set in HAL_RTC_AlarmAEventCallback */
 
 /* USER CODE END PV */
 
@@ -82,6 +87,7 @@ static void MY_GPIO_DeInit(void);
 /* USER CODE BEGIN 0 */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle)
 {
+    uart_idle_min = 0;   /* any UART traffic resets the idle timeout */
     RTC_TimeTypeDef st;
     RTC_DateTypeDef sd;
     switch (uart_state) {
@@ -116,6 +122,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle)
 
 void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtc)
 {
+    rtc_alarm_flag = 1;  /* remember that the RTC alarm woke the MCU */
 //    HAL_GPIO_TogglePin(led_GPIO_Port, led_Pin);
 }
 /* USER CODE END 0 */
@@ -170,10 +177,6 @@ int main(void)
   EPD_DisplayFrame(&epd);
 
   Paint_Clear(&paint, UNCOLORED);
-  if (EPD_Init(&epd, lut_partial_update) != 0) {
-    printf("e-Paper init failed\n");
-    return -1;
-  }
 
   /* USER CODE END 2 */
 
@@ -197,6 +200,14 @@ int main(void)
       char date[10];
       const char* wkd[] = {"Mon", "Tue", "Wen", "Thu", "Fri", "Sat", "Sun"};
 
+      /* Wake the e-Paper from deep sleep (EPD_Sleep is called at the end of
+         the previous loop iteration). Deep sleep keeps its standby current
+         near zero, but a full re-init is required before the next refresh. */
+      if (EPD_Init(&epd, lut_partial_update) != 0) {
+        printf("e-Paper init failed\n");
+        return -1;
+      }
+
       /* Get the RTC current Time */
       HAL_RTC_GetTime(&hrtc, &st, RTC_FORMAT_BIN);
       HAL_RTC_GetDate(&hrtc, &sd, RTC_FORMAT_BIN);
@@ -218,13 +229,24 @@ int main(void)
       Paint_DrawBitmap(&paint, 135, 55, 2, 13, point);
       Paint_DrawBitmap(&paint, 135, 85, 2, 13, point);
       HAL_GPIO_WritePin(led_GPIO_Port, led_Pin, GPIO_PIN_SET);
-      /* Display the frame_buffer */
+      /* Display the frame_buffer (single refresh; the duplicated one was
+         removed to halve the refresh energy) */
       EPD_SetFrameMemory(&epd, frame_buffer, 0, 0, Paint_GetWidth(&paint), Paint_GetHeight(&paint));
       EPD_DisplayFrame(&epd);
-      EPD_SetFrameMemory(&epd, frame_buffer, 0, 0, Paint_GetWidth(&paint), Paint_GetHeight(&paint));
-      EPD_DisplayFrame(&epd);
+      /* Deep sleep the e-Paper to cut its standby current */
+      EPD_Sleep(&epd);
 
       if (swton) {
+          /* UART/time-setting mode: count RTC-alarm wakeups. If no UART
+             traffic arrives for UART_IDLE_TIMEOUT_MIN minutes, switch to
+             STOP mode (lowest MCU idle current). */
+          if (rtc_alarm_flag) {
+              rtc_alarm_flag = 0;
+              if (++uart_idle_min >= UART_IDLE_TIMEOUT_MIN) {
+                  swton = 0;
+                  MY_GPIO_DeInit();
+              }
+          }
           HAL_SuspendTick();
           HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
           HAL_ResumeTick();
@@ -257,17 +279,16 @@ void SystemClock_Config(void)
     */
   HAL_PWR_EnableBkUpAccess();
 
-  __HAL_RCC_LSEDRIVE_CONFIG(RCC_LSEDRIVE_HIGH);
+  __HAL_RCC_LSEDRIVE_CONFIG(RCC_LSEDRIVE_LOW);
 
     /**Initializes the CPU, AHB and APB busses clocks
+    * Runs on 8MHz HSI without HSE/PLL: halves the MCU active current
+    * (the HSE crystal and PLL are not needed by any peripheral).
     */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE|RCC_OSCILLATORTYPE_LSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSE;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.LSEState = RCC_LSE_ON;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL2;
-  RCC_OscInitStruct.PLL.PREDIV = RCC_PREDIV_DIV1;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
@@ -277,7 +298,7 @@ void SystemClock_Config(void)
     */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
 
@@ -487,10 +508,17 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : busy_Pin swt_in_Pin */
-  GPIO_InitStruct.Pin = busy_Pin|swt_in_Pin;
+  /*Configure GPIO pin : busy_Pin */
+  GPIO_InitStruct.Pin = busy_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : swt_in_Pin (pull-down so an open switch reads LOW
+    and the device defaults to battery/STOP mode instead of floating) */
+  GPIO_InitStruct.Pin = swt_in_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PF6 PF7 */
