@@ -204,7 +204,7 @@ $(BUILD_DIR):
 # program
 #######################################
 prog:
-	openocd -d0 -f openocd.cfg -c init -c "reset halt" -c targets -c "poll off" -c "flash write_image erase build/$(TARGET).elf" -c "verify_image build/$(TARGET).elf" -c "reset run" -c targets -c shutdown
+	openocd -d0 -f openocd.cfg -c init -c "reset halt" -c targets -c "poll off" -c "flash write_image erase build/$(TARGET).elf" -c "verify_image build/$(TARGET).bin 0x08000000" -c "reset run" -c targets -c shutdown
 
 #######################################
 # clean up
