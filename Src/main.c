@@ -200,20 +200,33 @@ int main(void)
       char date[10];
       const char* wkd[] = {"Mon", "Tue", "Wen", "Thu", "Fri", "Sat", "Sun"};
 
-      /* Wake the e-Paper from deep sleep (EPD_Sleep is called at the end of
-         the previous loop iteration). Deep sleep keeps its standby current
-         near zero, but a full re-init is required before the next refresh. */
-      if (EPD_Init(&epd, lut_partial_update) != 0) {
-        printf("e-Paper init failed\n");
-        return -1;
+      /* Read the RTC current time first.  After every low-power wakeup the
+         calendar shadow registers must be re-synchronized with the APB clock
+         domain (clear RSF, wait until it is set again) before reading, or the
+         read can return torn values; the HAL documents this as mandatory
+         after wakeup from low-power modes. */
+      if (HAL_RTC_WaitForSynchro(&hrtc) != HAL_OK) {
+        printf("RTC sync failed\n");
       }
-
-      /* Get the RTC current Time */
       HAL_RTC_GetTime(&hrtc, &st, RTC_FORMAT_BIN);
       HAL_RTC_GetDate(&hrtc, &sd, RTC_FORMAT_BIN);
 
-      if ((st.Seconds == 0) && (st.Minutes == 0) && (st.Hours == 0))
-          NVIC_SystemReset();
+      /* Once a day (00:00) do a full refresh to clear partial-update
+         ghosting, as required by the vendor after many partial refreshes.
+         The old approach reset the MCU at exactly 00:00:00; that collided
+         with the calendar's day rollover and could corrupt the hour field
+         (hours kept counting past 23 while the date never advanced).  A
+         plain full refresh here never touches the RTC at the rollover
+         instant, so the calendar cannot be disturbed. */
+      int full_refresh = (st.Hours == 0) && (st.Minutes == 0);
+
+      /* Wake the e-Paper from deep sleep (EPD_Sleep is called at the end of
+         the previous loop iteration). Deep sleep keeps its standby current
+         near zero, but a full re-init is required before the next refresh. */
+      if (EPD_Init(&epd, full_refresh ? lut_full_update : lut_partial_update) != 0) {
+        printf("e-Paper init failed\n");
+        return -1;
+      }
 
       /* Write strings to the buffer */
       HAL_GPIO_WritePin(led_GPIO_Port, led_Pin, GPIO_PIN_RESET);
@@ -332,7 +345,7 @@ static void MX_RTC_Init(void)
 
 //  RTC_TimeTypeDef sTime;
 //  RTC_DateTypeDef sDate;
-  RTC_AlarmTypeDef sAlarm;
+  RTC_AlarmTypeDef sAlarm = {0};  /* zero-init: AlarmSubSecondMask must not be stack garbage */
 
     /**Initialize RTC Only
     */
@@ -378,10 +391,12 @@ static void MX_RTC_Init(void)
   sAlarm.AlarmTime.SubSeconds = 0x0;
   sAlarm.AlarmTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
   sAlarm.AlarmTime.StoreOperation = RTC_STOREOPERATION_RESET;
-  sAlarm.AlarmMask = RTC_ALARMMASK_ALL;
+  /* Wake every minute: only seconds are compared (must equal 0); date,
+     weekday, hours and minutes are all masked off. */
   sAlarm.AlarmMask = RTC_ALARMMASK_DATEWEEKDAY|RTC_ALARMMASK_HOURS
                               |RTC_ALARMMASK_MINUTES;
-//  sAlarm.AlarmSubSecondMask = RTC_ALARMSUBSECONDMASK_ALL;
+  /* Sub-seconds must not participate in the match either. */
+  sAlarm.AlarmSubSecondMask = RTC_ALARMSUBSECONDMASK_ALL;
   sAlarm.AlarmDateWeekDaySel = RTC_ALARMDATEWEEKDAYSEL_DATE;
   sAlarm.AlarmDateWeekDay = 0x1;
   sAlarm.Alarm = RTC_ALARM_A;

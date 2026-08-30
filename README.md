@@ -8,7 +8,7 @@ It stays in micro-amp standby and wakes once per minute via an RTC alarm to refr
 - **Clock display**: large 7-segment-style bitmap digits for "HH:MM", with the date (YY-MM-DD) and weekday (Mon~Sun) on the top line and a colon shown as two fixed dots.
 - **RTC timekeeping**: on-chip RTC driven by an external 32.768 kHz LSE crystal; keeps running in the backup domain.
 - **Minute-by-minute refresh**: RTC Alarm A fires every minute (second = 0) to wake the MCU and refresh the e-Paper once; the rest of the minute (~58 s) is spent sleeping.
-- **Partial refresh + daily full refresh**: uses the partial-update LUT for normal refreshes (faster, lower power); at 00:00:00 every day the MCU performs a soft reset and one full refresh to clear ghosting (as required by the vendor after many partial refreshes).
+- **Partial refresh + daily full refresh**: uses the partial-update LUT for normal refreshes (faster, lower power); at 00:00 every day one refresh switches to the full-update LUT to clear ghosting (as required by the vendor after many partial refreshes). (Older builds performed an MCU soft reset at exactly 00:00:00 for this; that collided with the RTC calendar's day rollover and could corrupt the hour field, so the reset was replaced by a plain full refresh that never touches the RTC at the rollover instant.)
 - **Serial time setting**: interactive date/time entry over UART (115200, 8N1) — see [Serial Time Setting](#serial-time-setting).
 - **Dual operating modes**: a hardware switch selects "UART/debug mode (SLEEP)" or "battery mode (STOP)"; battery mode wakes only on the RTC alarm for the lowest possible current.
 
