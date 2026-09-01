@@ -88,8 +88,11 @@ static void MY_GPIO_DeInit(void);
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle)
 {
     uart_idle_min = 0;   /* any UART traffic resets the idle timeout */
-    RTC_TimeTypeDef st;
-    RTC_DateTypeDef sd;
+    /* Zero-initialize: HAL_RTC_SetTime() ORs DayLightSaving/StoreOperation
+       into RTC->CR, so stack garbage here could set CR.FMT (12-hour mode),
+       disable Alarm A, or trigger a DST hour shift. */
+    RTC_TimeTypeDef st = {0};
+    RTC_DateTypeDef sd = {0};
     switch (uart_state) {
         case 0:
             HAL_UART_Transmit_IT(UartHandle, (uint8_t *)"\r\nInput Date(yy-mm-dd:w):\r\n", 27);
@@ -111,7 +114,20 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle)
             st.Minutes = (rxBuf[3] - '0') * 10 + rxBuf[4] - '0';
             st.Seconds = (rxBuf[6] - '0') * 10 + rxBuf[7] - '0';
             st.TimeFormat = RTC_HOURFORMAT_24;
-            HAL_RTC_SetTime(&hrtc, &st, RTC_FORMAT_BIN);
+            /* USE_FULL_ASSERT is off, so the HAL would silently write an
+               invalid hour (e.g. 15 into a 12-hour-mode RTC) and let the
+               hour counter run past 23.  Validate before writing. */
+            if ((st.Hours > 23) || (st.Minutes > 59) || (st.Seconds > 59)) {
+                HAL_UART_Transmit_IT(UartHandle, (uint8_t *)"\r\nBad Time, Input Again(hh:mm:ss):\r\n", 34);
+                HAL_UART_Receive_IT(UartHandle, rxBuf, 8);
+                break;   /* stay in state 2 and retry */
+            }
+            if (HAL_RTC_SetTime(&hrtc, &st, RTC_FORMAT_BIN) != HAL_OK) {
+                HAL_UART_Transmit_IT(UartHandle, (uint8_t *)"\r\nRTC Set Time Failed!\r\n", 24);
+                HAL_UART_Receive_IT(UartHandle, rxBuf, 1);
+                uart_state = 3;
+                break;
+            }
             HAL_UART_Transmit_IT(UartHandle, (uint8_t *)"\r\nInput Done!\r\n", 15);
             HAL_UART_Receive_IT(UartHandle, rxBuf, 1);
             uart_state = 3;
